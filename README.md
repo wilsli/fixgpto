@@ -1,0 +1,1 @@
+从Google Photos导出的照片可能会丢失meta data信息，这个project就是从导出文件里尽量补回这些信息的

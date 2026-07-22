@@ -1,1 +1,3 @@
-/sample/
+sample/
+__pycache__/
+.venv/

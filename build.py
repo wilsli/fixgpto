@@ -50,9 +50,9 @@ def build_executable():
     subprocess.check_call(cmd, cwd=str(project_root))
     
     # Verify output
-    exe_path = project_root / 'dist' / 'fixgpto'
+    exe_path = project_root / 'dist' / 'gphoto_takeout_deta_fix'
     if sys.platform == 'win32':
-        exe_path = project_root / 'dist' / 'fixgpto.exe'
+        exe_path = project_root / 'dist' / 'gphoto_takeout_deta_fix.exe'
     
     if exe_path.exists():
         size_mb = exe_path.stat().st_size / (1024 * 1024)
@@ -68,10 +68,10 @@ def build_executable():
 def test_executable():
     """Test the built executable with sample data."""
     project_root = Path(__file__).parent
-    exe_path = project_root / 'dist' / 'fixgpto'
+    exe_path = project_root / 'dist' / 'gphoto_takeout_deta_fix'
     
     if sys.platform == 'win32':
-        exe_path = project_root / 'dist' / 'fixgpto.exe'
+        exe_path = project_root / 'dist' / 'gphoto_takeout_deta_fix.exe'
     
     if not exe_path.exists():
         print("Executable not found. Run build first.")

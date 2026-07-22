@@ -19,7 +19,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['runtime_hook.py'],
     excludes=[
         'matplotlib',
         'numpy',
@@ -41,7 +41,8 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='fixgpto',
+    name='gphoto_takeout_deta_fix',
+    onefile=True,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -17,7 +17,7 @@ from exiftool_wrapper import write_metadata as fill_exiftool
 PIEXIF_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff"}
 
 # Formats handled by exiftool (HEIC/HEIF/MOV/MP4)
-EXIFTOOL_EXTENSIONS = {".heic", ".heif", ".mov", ".mp4"}
+EXIFTOOL_EXTENSIONS = {".heic", ".heif", ".mov", ".mp4", ".gif"}
 
 SUPPORTED_EXTENSIONS = PIEXIF_EXTENSIONS | EXIFTOOL_EXTENSIONS
 
@@ -54,7 +54,7 @@ def get_existing_exif(image_path):
     try:
         return piexif.load(str(image_path))
     except Exception:
-        return piexif.ExifDict()
+        return {'Exif': {}, 'GPS': {}, 'Image': {}}
 
 
 def set_ifd_tag(exif_dict, ifd_name, tag, value):

@@ -4,9 +4,17 @@
 import json
 import os
 import shutil
+import stat
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _ensure_exiftool_executable(path):
+    """Make sure the exiftool binary has execute permission."""
+    if os.path.isfile(path):
+        current = os.stat(path).st_mode
+        os.chmod(path, current | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
 def get_exiftool_path():
@@ -29,6 +37,8 @@ def run_exiftool(args, input_data=None):
         raise RuntimeError(
             "exiftool not found. Bundle it under bundled_exiftool/ or install it."
         )
+
+    _ensure_exiftool_executable(exiftool_path)
 
     cmd = [exiftool_path] + args
     try:

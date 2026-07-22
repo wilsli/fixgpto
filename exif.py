@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from fractions import Fraction
@@ -55,6 +56,22 @@ def get_existing_exif(image_path):
         return piexif.load(str(image_path))
     except Exception:
         return {'Exif': {}, 'GPS': {}, 'Image': {}}
+
+
+def _get_expected_image_name(json_stem):
+    """Convert a JSON stem like 'IMG_0580.JPG(1)' to 'IMG_0580(1).JPG'."""
+    stem = json_stem.replace(".supplemental-metadata", "")
+
+    match = re.match(r"^(.+?)(\(\d+\))$", stem)
+    if match:
+        name_without_suffix = match.group(1)
+        suffix = match.group(2)
+        dot_pos = name_without_suffix.rfind(".")
+        if dot_pos != -1:
+            return name_without_suffix[:dot_pos] + suffix + name_without_suffix[dot_pos:]
+        return name_without_suffix + suffix
+
+    return stem
 
 
 def set_ifd_tag(exif_dict, ifd_name, tag, value):
@@ -166,15 +183,17 @@ def fill_exif(image_path, meta, dry_run=False):
 def process_directory(directory, recursive=False, dry_run=False):
     dir_path = Path(directory)
     if recursive:
-        json_files = sorted(dir_path.rglob("*.supplemental-metadata.json"))
+        json_files = sorted(dir_path.rglob("*.json"))
     else:
-        json_files = sorted(dir_path.glob("*.supplemental-metadata.json"))
+        json_files = sorted(dir_path.glob("*.json"))
 
     results = []
     for json_file in json_files:
-        base_name = json_file.stem.replace(".supplemental-metadata", "")
+        if ".supplemental-metadata" not in json_file.name:
+            continue
+        expected_name = _get_expected_image_name(json_file.stem)
         candidates = list(json_file.parent.iterdir())
-        matched = [c for c in candidates if c.name.upper() == base_name.upper() and c.suffix.lower() in SUPPORTED_EXTENSIONS]
+        matched = [c for c in candidates if c.name.upper() == expected_name.upper() and c.suffix.lower() in SUPPORTED_EXTENSIONS]
         if not matched:
             print(f"[SKIP] No matching image for {json_file.relative_to(dir_path)}")
             continue

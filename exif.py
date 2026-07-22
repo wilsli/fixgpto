@@ -60,7 +60,7 @@ def get_existing_exif(image_path):
 
 def _get_expected_image_name(json_stem):
     """Convert a JSON stem like 'IMG_0580.JPG(1)' to 'IMG_0580(1).JPG'."""
-    stem = json_stem.replace(".supplemental-metadata", "")
+    stem = json_stem.replace(".supplemental-metadata", "").rstrip(".")
 
     match = re.match(r"^(.+?)(\(\d+\))$", stem)
     if match:
@@ -195,6 +195,13 @@ def process_directory(directory, recursive=False, dry_run=False):
         expected_name = _get_expected_image_name(json_file.stem)
         candidates = list(json_file.parent.iterdir())
         matched = [c for c in candidates if c.name.upper() == expected_name.upper() and c.suffix.lower() in SUPPORTED_EXTENSIONS]
+        if not matched and '.' not in expected_name:
+            for ext in SUPPORTED_EXTENSIONS:
+                alt_name = f"{expected_name}{ext}"
+                alt_matched = [c for c in candidates if c.name.upper() == alt_name.upper()]
+                if alt_matched:
+                    matched = alt_matched
+                    break
         if not matched:
             rel_path = json_file.relative_to(dir_path)
             print(f"[SKIP] No matching image for {rel_path}")

@@ -188,6 +188,7 @@ def process_directory(directory, recursive=False, dry_run=False):
         json_files = sorted(dir_path.glob("*.json"))
 
     results = []
+    skip_reasons = []
     for json_file in json_files:
         if ".supplemental-metadata" not in json_file.name:
             continue
@@ -195,7 +196,9 @@ def process_directory(directory, recursive=False, dry_run=False):
         candidates = list(json_file.parent.iterdir())
         matched = [c for c in candidates if c.name.upper() == expected_name.upper() and c.suffix.lower() in SUPPORTED_EXTENSIONS]
         if not matched:
-            print(f"[SKIP] No matching image for {json_file.relative_to(dir_path)}")
+            rel_path = json_file.relative_to(dir_path)
+            print(f"[SKIP] No matching image for {rel_path}")
+            skip_reasons.append(str(rel_path))
             continue
 
         image_path = str(matched[0])
@@ -217,7 +220,7 @@ def process_directory(directory, recursive=False, dry_run=False):
             "skipped": skipped,
         })
 
-    return results
+    return results, skip_reasons
 
 
 def main():
@@ -232,10 +235,15 @@ def main():
         print(f"Error: {directory} is not a directory")
         sys.exit(1)
 
-    results = process_directory(directory, recursive=args.recursive, dry_run=args.dry_run)
+    results, skip_reasons = process_directory(directory, recursive=args.recursive, dry_run=args.dry_run)
     total_written = sum(len(r["written"]) for r in results)
     total_skipped = sum(len(r["skipped"]) for r in results)
     print(f"\nDone: {len(results)} files processed, {total_written} tags written, {total_skipped} tags skipped")
+
+    if skip_reasons:
+        print("\n--- Skipped Files ---")
+        for path in skip_reasons:
+            print(f"  ! {path}")
 
 
 if __name__ == "__main__":

@@ -3,4 +3,6 @@ __pycache__/
 .venv/
 build/
 dist/
+release/
+.opencode/
 .DS_Store

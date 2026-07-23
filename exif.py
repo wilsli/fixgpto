@@ -137,13 +137,13 @@ def process_directory(directory, recursive=False, dry_run=False):
 
         prefix = "[DRY RUN] " if dry_run else ""
         status = "OK" if written else "ALL EXISTING"
-        print(f"{prefix}[{status}] {os.path.basename(image_path)}")
+        print(f"{prefix}[{status}] {image_path}")
         for w in written:
             print(f"  + {w}")
         for s in skipped:
             print(f"  ~ skip {s}")
         results.append({
-            "file": os.path.basename(image_path),
+            "file": image_path,
             "written": written,
             "skipped": skipped,
         })

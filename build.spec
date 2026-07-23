@@ -41,7 +41,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='gphoto_meta_fix_appleSillicon',
+    name='gphoto_takeout_meta_fix',
     onefile=True,
     debug=False,
     bootloader_ignore_signals=False,

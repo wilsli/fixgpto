@@ -156,6 +156,7 @@ def main():
     parser.add_argument("directory", help="Directory to process")
     parser.add_argument("-r", "--recursive", action="store_true", help="Process subdirectories recursively")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be written without modifying files")
+    parser.add_argument("--prune-json", action="store_true", help="Delete JSON files that failed to match a media file")
     import platform
     exe_name = os.path.basename(sys.executable) if hasattr(sys, 'executable') else ''
     plat = f"{platform.system()} {platform.machine()}"
@@ -170,9 +171,23 @@ def main():
         sys.exit(1)
 
     results, skip_reasons = process_directory(directory, recursive=args.recursive, dry_run=args.dry_run)
+    
+    pruned = []
+    if args.prune_json:
+        for rel in skip_reasons:
+            json_path = Path(directory) / rel
+            if json_path.exists():
+                if not args.dry_run:
+                    json_path.unlink()
+                pruned.append(rel)
+
     total_written = sum(len(r["written"]) for r in results)
     total_skipped = sum(len(r["skipped"]) for r in results)
     print(f"\nDone: {len(results)} files processed, {total_written} tags written, {total_skipped} tags skipped")
+    if pruned:
+        print(f"Pruned {len(pruned)} unmatched JSON file(s):")
+        for p in pruned:
+            print(f"  - {p}")
 
     if skip_reasons:
         print("\n--- Skipped Files ---")

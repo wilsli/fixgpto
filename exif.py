@@ -6,57 +6,19 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
-from fractions import Fraction
 from pathlib import Path
-
-import piexif
 
 from exiftool_wrapper import write_metadata as fill_exiftool, write_file_created_date
 from version import __version__
 
-# Formats handled by piexif (JPEG/TIFF-based)
-PIEXIF_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".cr2"}
-
-# Formats handled by exiftool (HEIC/HEIF/MOV/MP4/MPG)
-EXIFTOOL_EXTENSIONS = {".heic", ".heif", ".mov", ".mp4", ".gif", ".mpg"}
-
-SUPPORTED_EXTENSIONS = PIEXIF_EXTENSIONS | EXIFTOOL_EXTENSIONS
-
-
-def decimal_to_dms(value):
-    abs_value = abs(value)
-    degrees = int(abs_value)
-    minutes_full = (abs_value - degrees) * 60
-    minutes = int(minutes_full)
-    seconds = round((minutes_full - minutes) * 60, 3)
-    if seconds >= 60:
-        seconds -= 60
-        minutes += 1
-    return [
-        Fraction(seconds).limit_denominator(1000),
-        Fraction(minutes).limit_denominator(1000),
-        Fraction(degrees).limit_denominator(1000),
-    ]
-
-
-def dms_to_exif(dms):
-    return tuple(
-        (int(frac.numerator), int(frac.denominator)) for frac in dms
-    )
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".cr2", ".heic", ".heif", ".mov", ".mp4", ".gif", ".mpg"}
 
 
 def timestamp_to_datetime(timestamp_str):
+    from datetime import datetime, timezone
     ts = int(timestamp_str)
     dt = datetime.fromtimestamp(ts, tz=timezone.utc)
     return dt.strftime("%Y:%m:%d %H:%M:%S")
-
-
-def get_existing_exif(image_path):
-    try:
-        return piexif.load(str(image_path))
-    except Exception:
-        return {'Exif': {}, 'GPS': {}, 'Image': {}}
 
 
 def _get_expected_image_name(json_stem):
@@ -134,123 +96,8 @@ def _find_matching_image(json_file, expected_name, trailing_dots):
     return None
 
 
-def set_ifd_tag(exif_dict, ifd_name, tag, value):
-    if ifd_name not in exif_dict or exif_dict[ifd_name] is None:
-        exif_dict[ifd_name] = {}
-    exif_dict[ifd_name][tag] = value
-
-
-def has_tag(exif_dict, ifd_name, tag):
-    ifd = exif_dict.get(ifd_name)
-    return bool(ifd and tag in ifd)
-
-
 def fill_exif(image_path, meta, dry_run=False):
-    ext = Path(image_path).suffix.lower()
-    if ext in EXIFTOOL_EXTENSIONS:
-        return fill_exiftool(image_path, meta, dry_run=dry_run)
-
-    exif_dict = get_existing_exif(image_path)
-    written = []
-    skipped = []
-
-    # --- DateTimeOriginal (from photoTakenTime) ---
-    phototaken = meta.get("photoTakenTime")
-    if phototaken and "timestamp" in phototaken:
-        dt_str = timestamp_to_datetime(phototaken["timestamp"])
-        if has_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeOriginal):
-            skipped.append("DateTimeOriginal")
-        else:
-            set_ifd_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeOriginal, dt_str.encode("ascii"))
-            written.append(f"DateTimeOriginal={dt_str}")
-
-    # --- DateTimeDigitized (from creationTime) ---
-    creation_time = meta.get("creationTime")
-    if creation_time and "timestamp" in creation_time:
-        dt_str = timestamp_to_datetime(creation_time["timestamp"])
-        if has_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeDigitized):
-            skipped.append("DateTimeDigitized")
-        else:
-            set_ifd_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeDigitized, dt_str.encode("ascii"))
-            written.append(f"DateTimeDigitized={dt_str}")
-
-    # --- DateTime (prefer photoTakenTime, fall back to creationTime) ---
-    datetime_source = meta.get("photoTakenTime") or creation_time
-    if datetime_source and "timestamp" in datetime_source:
-        dt_str = timestamp_to_datetime(datetime_source["timestamp"])
-        if has_tag(exif_dict, "Image", piexif.ImageIFD.DateTime):
-            skipped.append("DateTime")
-        else:
-            set_ifd_tag(exif_dict, "Image", piexif.ImageIFD.DateTime, dt_str.encode("ascii"))
-            written.append(f"DateTime={dt_str}")
-
-    # --- GPS ---
-    geo = meta.get("geoData", {})
-    lat = geo.get("latitude")
-    lng = geo.get("longitude")
-    alt = geo.get("altitude")
-
-    if lat and lat != 0.0:
-        if has_tag(exif_dict, "GPS", piexif.GPSIFD.GPSLatitude):
-            skipped.append("GPSLatitude")
-        else:
-            dms = decimal_to_dms(lat)
-            ref = b"N" if lat >= 0 else b"S"
-            set_ifd_tag(exif_dict, "GPS", piexif.GPSIFD.GPSLatitudeRef, ref)
-            set_ifd_tag(exif_dict, "GPS", piexif.GPSIFD.GPSLatitude, dms_to_exif(dms))
-            written.append(f"GPSLatitude={lat}")
-
-        if has_tag(exif_dict, "GPS", piexif.GPSIFD.GPSLongitude):
-            skipped.append("GPSLongitude")
-        else:
-            dms = decimal_to_dms(lng)
-            ref = b"E" if lng >= 0 else b"W"
-            set_ifd_tag(exif_dict, "GPS", piexif.GPSIFD.GPSLongitudeRef, ref)
-            set_ifd_tag(exif_dict, "GPS", piexif.GPSIFD.GPSLongitude, dms_to_exif(dms))
-            written.append(f"GPSLongitude={lng}")
-
-    if alt and alt != 0.0:
-        if has_tag(exif_dict, "GPS", piexif.GPSIFD.GPSAltitude):
-            skipped.append("GPSAltitude")
-        else:
-            if alt >= 0:
-                set_ifd_tag(exif_dict, "GPS", piexif.GPSIFD.GPSAltitudeRef, b"\x00\x00")
-                set_ifd_tag(
-                    exif_dict, "GPS", piexif.GPSIFD.GPSAltitude,
-                    ((int(alt * 100), 100),)
-                )
-            else:
-                set_ifd_tag(exif_dict, "GPS", piexif.GPSIFD.GPSAltitudeRef, b"\x01\x00")
-                set_ifd_tag(
-                    exif_dict, "GPS", piexif.GPSIFD.GPSAltitude,
-                    ((int(abs(alt) * 100), 100),)
-                )
-            written.append(f"GPSAltitude={alt}")
-
-    # --- ImageDescription ---
-    description = meta.get("description")
-    if description:
-        if has_tag(exif_dict, "Image", piexif.ImageIFD.ImageDescription):
-            skipped.append("ImageDescription")
-        else:
-            set_ifd_tag(
-                exif_dict, "Image", piexif.ImageIFD.ImageDescription,
-                description.encode("utf-8")
-            )
-            written.append(f"ImageDescription={description}")
-
-    if written and not dry_run:
-        new_exif_bytes = piexif.dump(exif_dict)
-        piexif.insert(new_exif_bytes, image_path)
-
-    # --- Filesystem CreationDate (from photoTakenTime or photoCreationTime) ---
-    # Silently skipped on Linux (exiftool doesn't support writing it)
-    fs_creation = meta.get("photoTakenTime") or meta.get("photoCreationTime")
-    if fs_creation and "timestamp" in fs_creation:
-        ts = int(fs_creation["timestamp"])
-        write_file_created_date(image_path, ts, dry_run=dry_run)
-
-    return written, skipped
+    return fill_exiftool(image_path, meta, dry_run=dry_run)
 
 
 def process_directory(directory, recursive=False, dry_run=False):

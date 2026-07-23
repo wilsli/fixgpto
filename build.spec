@@ -14,9 +14,7 @@ a = Analysis(
         ('bundled_exiftool/fmt_files', 'bundled_exiftool/fmt_files'),
         ('bundled_exiftool/arg_files', 'bundled_exiftool/arg_files'),
     ],
-    hiddenimports=[
-        'piexif',
-    ],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=['runtime_hook.py'],

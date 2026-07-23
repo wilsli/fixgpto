@@ -312,7 +312,7 @@ def main():
     import platform
     exe_name = os.path.basename(sys.executable) if hasattr(sys, 'executable') else ''
     plat = f"{platform.system()} {platform.machine()}"
-    if sys._MEIPASS:
+    if getattr(sys, '_MEIPASS', None):
         plat += " (bundled)"
     parser.add_argument("--version", action="version", version=f"GooglePhotos Takeout Metadata Fixer: {__version__} [{plat}]")
     args = parser.parse_args()

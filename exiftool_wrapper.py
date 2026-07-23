@@ -162,6 +162,16 @@ def write_metadata(image_path, meta, dry_run=False):
             tags.extend(["-MediaModifyDate=" + dt_str])
             written.append("MediaModifyDate=" + dt_str)
 
+    # --- FileCreateDate (filesystem creation date) ---
+    fs_creation = meta.get("photoTakenTime") or meta.get("photoCreationTime")
+    if fs_creation and "timestamp" in fs_creation:
+        dt_str = timestamp_to_datetime(fs_creation["timestamp"])
+        if has_tag(existing, "FileCreateDate"):
+            skipped.append("FileCreateDate")
+        else:
+            tags.extend(["-FileCreateDate=" + dt_str])
+            written.append("FileCreateDate=" + dt_str)
+
     # --- GPS ---
     geo = meta.get("geoData", {})
     lat = geo.get("latitude")

@@ -13,6 +13,7 @@ from pathlib import Path
 import piexif
 
 from exiftool_wrapper import write_metadata as fill_exiftool
+from version import __version__
 
 # Formats handled by piexif (JPEG/TIFF-based)
 PIEXIF_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".cr2"}
@@ -49,6 +50,15 @@ def timestamp_to_datetime(timestamp_str):
     ts = int(timestamp_str)
     dt = datetime.fromtimestamp(ts, tz=timezone.utc)
     return dt.strftime("%Y:%m:%d %H:%M:%S")
+
+
+def timestamp_to_setfile_date(timestamp_str):
+    """Convert Unix timestamp to SetFile-compatible date format (mm/dd/yyyy hh:mm:ss AM/PM)."""
+    ts = int(timestamp_str)
+    dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+    # Convert to local timezone for SetFile
+    dt_local = dt.astimezone()
+    return dt_local.strftime("%m/%d/%Y %I:%M:%S %p")
 
 
 def get_existing_exif(image_path):
@@ -242,6 +252,25 @@ def fill_exif(image_path, meta, dry_run=False):
         new_exif_bytes = piexif.dump(exif_dict)
         piexif.insert(new_exif_bytes, image_path)
 
+    # --- Filesystem CreationDate (from photoTakenTime or photoCreationTime) ---
+    fs_creation = meta.get("photoTakenTime") or meta.get("photoCreationTime")
+    if fs_creation and "timestamp" in fs_creation and not dry_run:
+        dt_str_setfile = timestamp_to_setfile_date(fs_creation["timestamp"])
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["SetFile", "-d", dt_str_setfile, str(image_path)],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                written.append(f"FileCreateDate={dt_str_setfile}")
+            else:
+                skipped.append("FileCreateDate")
+        except FileNotFoundError:
+            skipped.append("FileCreateDate")
+        except Exception:
+            skipped.append("FileCreateDate")
+
     return written, skipped
 
 
@@ -301,6 +330,7 @@ def main():
     parser.add_argument("directory", help="Directory to process")
     parser.add_argument("-r", "--recursive", action="store_true", help="Process subdirectories recursively")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be written without modifying files")
+    parser.add_argument("--version", action="version", version=f"GooglePhotos Takeout Metadata Fixer: {__version__}")
     args = parser.parse_args()
 
     directory = args.directory

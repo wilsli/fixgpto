@@ -15,10 +15,10 @@ import piexif
 from exiftool_wrapper import write_metadata as fill_exiftool
 
 # Formats handled by piexif (JPEG/TIFF-based)
-PIEXIF_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff"}
+PIEXIF_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".cr2"}
 
-# Formats handled by exiftool (HEIC/HEIF/MOV/MP4)
-EXIFTOOL_EXTENSIONS = {".heic", ".heif", ".mov", ".mp4", ".gif"}
+# Formats handled by exiftool (HEIC/HEIF/MOV/MP4/MPG)
+EXIFTOOL_EXTENSIONS = {".heic", ".heif", ".mov", ".mp4", ".gif", ".mpg"}
 
 SUPPORTED_EXTENSIONS = PIEXIF_EXTENSIONS | EXIFTOOL_EXTENSIONS
 
@@ -59,7 +59,7 @@ def get_existing_exif(image_path):
 
 
 def _get_expected_image_name(json_stem):
-    """Convert a JSON stem like 'IMG_0580.JPG(1)' to 'IMG_0580(1).JPG'."""
+    """Convert a JSON stem like 'IMG_0580.JPG.supplemental-metadata(1)' to 'IMG_0580(1).JPG'."""
     stem = json_stem.replace(".supplemental-metadata", "").rstrip(".")
 
     match = re.match(r"^(.+?)(\(\d+\))$", stem)

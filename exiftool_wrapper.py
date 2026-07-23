@@ -218,3 +218,19 @@ def write_metadata(image_path, meta, dry_run=False):
         run_exiftool(tags + ["-overwrite_original", str(image_path)])
 
     return written, skipped
+
+
+def write_file_created_date(image_path, timestamp, dry_run=False):
+    """Write FileCreateDate (filesystem creation date) using exiftool.
+    
+    Returns (written: bool, error: str|None).
+    """
+    dt_str = timestamp_to_datetime(timestamp)
+    tags = [f"-FileCreateDate={dt_str}"]
+    if not dry_run:
+        try:
+            run_exiftool(tags + ["-overwrite_original", str(image_path)])
+            return True, None
+        except Exception as e:
+            return False, str(e)
+    return True, None

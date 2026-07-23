@@ -68,11 +68,20 @@ def read_metadata(image_path):
 
 
 def has_tag(metadata, *tag_names):
-    """Check if any of the given tag names exist in metadata (case-insensitive)."""
+    """Check if any of the given tag names exist in metadata (case-insensitive).
+    
+    exiftool -j returns grouped keys like "EXIF:DateTimeOriginal", so we check
+    both the full key and the part after the last colon.
+    """
     lower_tags = {t.lower(): t for t in tag_names}
     for key in metadata:
-        if key.lower() in lower_tags:
-            return lower_tags[key.lower()]
+        key_lower = key.lower()
+        if key_lower in lower_tags:
+            return lower_tags[key_lower]
+        # Check bare tag name (after the group prefix, e.g., "EXIF:DateTimeOriginal" -> "DateTimeOriginal")
+        bare = key_lower.rsplit(":", 1)[-1]
+        if bare in lower_tags:
+            return lower_tags[bare]
     return None
 
 
@@ -96,6 +105,13 @@ def decimal_to_dms(value):
     return [seconds, minutes, degrees]
 
 
+VIDEO_EXTENSIONS = {".mov", ".mp4", ".mpg", ".avi", ".mkv", ".flv", ".wmv", ".m4v", ".3gp"}
+
+
+def _is_video(path):
+    return Path(path).suffix.lower() in VIDEO_EXTENSIONS
+
+
 def write_metadata(image_path, meta, dry_run=False):
     """Write Google Photos metadata to a file using exiftool.
 
@@ -107,6 +123,7 @@ def write_metadata(image_path, meta, dry_run=False):
     skipped = []
     tags = []
 
+    is_video = _is_video(image_path)
     existing = read_metadata(image_path)
 
     # --- DateTimeOriginal / DateTimeDigitized ---
@@ -133,11 +150,12 @@ def write_metadata(image_path, meta, dry_run=False):
             tags.extend(["-CreateDate=" + dt_str])
             written.append("CreateDate=" + dt_str)
 
-        if has_tag(existing, "MediaCreateDate"):
-            skipped.append("MediaCreateDate")
-        else:
-            tags.extend(["-MediaCreateDate=" + dt_str])
-            written.append("MediaCreateDate=" + dt_str)
+        if is_video:
+            if has_tag(existing, "MediaCreateDate"):
+                skipped.append("MediaCreateDate")
+            else:
+                tags.extend(["-MediaCreateDate=" + dt_str])
+                written.append("MediaCreateDate=" + dt_str)
 
     # --- DateTime (from creationTime) ---
     creation_time = meta.get("creationTime")
@@ -156,11 +174,12 @@ def write_metadata(image_path, meta, dry_run=False):
             tags.extend(["-ModifyDate=" + dt_str])
             written.append("ModifyDate=" + dt_str)
 
-        if has_tag(existing, "MediaModifyDate"):
-            skipped.append("MediaModifyDate")
-        else:
-            tags.extend(["-MediaModifyDate=" + dt_str])
-            written.append("MediaModifyDate=" + dt_str)
+        if is_video:
+            if has_tag(existing, "MediaModifyDate"):
+                skipped.append("MediaModifyDate")
+            else:
+                tags.extend(["-MediaModifyDate=" + dt_str])
+                written.append("MediaModifyDate=" + dt_str)
 
     # --- FileCreateDate (filesystem creation date) ---
     # Only supported on Windows and macOS

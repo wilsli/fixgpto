@@ -309,7 +309,12 @@ def main():
     parser.add_argument("directory", help="Directory to process")
     parser.add_argument("-r", "--recursive", action="store_true", help="Process subdirectories recursively")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be written without modifying files")
-    parser.add_argument("--version", action="version", version=f"GooglePhotos Takeout Metadata Fixer: {__version__}")
+    import platform
+    exe_name = os.path.basename(sys.executable) if hasattr(sys, 'executable') else ''
+    plat = f"{platform.system()} {platform.machine()}"
+    if sys._MEIPASS:
+        plat += " (bundled)"
+    parser.add_argument("--version", action="version", version=f"GooglePhotos Takeout Metadata Fixer: {__version__} [{plat}]")
     args = parser.parse_args()
 
     directory = args.directory

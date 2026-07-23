@@ -62,16 +62,75 @@ def _get_expected_image_name(json_stem):
     """Convert a JSON stem like 'IMG_0580.JPG.supplemental-metadata(1)' to 'IMG_0580(1).JPG'."""
     stem = json_stem.replace(".supplemental-metadata", "").rstrip(".")
 
-    match = re.match(r"^(.+?)(\(\d+\))$", stem)
+    match = re.match(r"^(.+)(\(\d+\))$", stem)
     if match:
-        name_without_suffix = match.group(1)
+        base = match.group(1)
         suffix = match.group(2)
-        dot_pos = name_without_suffix.rfind(".")
+
+        # Check if base already has (N) right before extension: "NAME(N).ext"
+        inner_match = re.match(r"^(.+)\((\d+)\)\.(.+)$", base)
+        if inner_match:
+            return base
+
+        # Special case: base is just "(N).ext" like "(3).jpg"
+        # The parenthesized number IS the original filename, not a duplicate marker
+        if re.match(r"^\(\d+\)\.", base):
+            return base
+
+        # Insert suffix before the file extension
+        dot_pos = base.rfind(".")
         if dot_pos != -1:
-            return name_without_suffix[:dot_pos] + suffix + name_without_suffix[dot_pos:]
-        return name_without_suffix + suffix
+            return base[:dot_pos] + suffix + base[dot_pos:]
+        return base + suffix
 
     return stem
+
+
+def _get_trailing_dot_count(json_stem):
+    """Count trailing dots in the JSON stem after removing .supplemental-metadata."""
+    raw = json_stem.replace(".supplemental-metadata", "")
+    return len(raw) - len(raw.rstrip('.'))
+
+
+def _decode_google_escape(name_without_ext, trailing_dots):
+    """Decode Google Photos' trailing dot-to-underscore encoding.
+    
+    Google Photos encodes trailing '_' as '.' in supplemental-metadata JSON stems.
+    Since we can't distinguish original dots from encoded underscores, we try all
+    possible suffix combinations of dots and underscores.
+    """
+    stripped = name_without_ext.rstrip('.')
+    
+    if trailing_dots == 0:
+        return [name_without_ext]
+    
+    results = []
+    for i in range(trailing_dots + 1):
+        result = stripped + '.' * i + '_' * (trailing_dots - i)
+        results.append(result)
+    return results
+
+
+def _find_matching_image(json_file, expected_name, trailing_dots):
+    """Find a matching image file from a candidate name stem.
+    
+    Tries direct match first, then Google Photos escape decoding variants.
+    """
+    candidates = list(json_file.parent.iterdir())
+    
+    # Direct match against full filename
+    matched = [c for c in candidates if c.name.upper() == expected_name.upper() and c.suffix.lower() in SUPPORTED_EXTENSIONS]
+    if matched:
+        return matched
+    
+    # Decode Google escape: compare name stem without extension
+    decoded_variants = _decode_google_escape(expected_name, trailing_dots)
+    for variant in decoded_variants:
+        matched = [c for c in candidates if c.with_suffix('').name.upper() == variant.upper() and c.suffix.lower() in SUPPORTED_EXTENSIONS]
+        if matched:
+            return matched
+    
+    return None
 
 
 def set_ifd_tag(exif_dict, ifd_name, tag, value):
@@ -94,24 +153,30 @@ def fill_exif(image_path, meta, dry_run=False):
     written = []
     skipped = []
 
-    # --- DateTimeOriginal / DateTimeDigitized ---
-    time_source = meta.get("photoTakenTime") or meta.get("creationTime")
-    if time_source and "timestamp" in time_source:
-        dt_str = timestamp_to_datetime(time_source["timestamp"])
-        for tag_name, tag_id in [
-            ("DateTimeOriginal", piexif.ExifIFD.DateTimeOriginal),
-            ("DateTimeDigitized", piexif.ExifIFD.DateTimeDigitized),
-        ]:
-            if has_tag(exif_dict, "Exif", tag_id):
-                skipped.append(tag_name)
-            else:
-                set_ifd_tag(exif_dict, "Exif", tag_id, dt_str.encode("ascii"))
-                written.append(f"{tag_name}={dt_str}")
+    # --- DateTimeOriginal (from photoTakenTime) ---
+    phototaken = meta.get("photoTakenTime")
+    if phototaken and "timestamp" in phototaken:
+        dt_str = timestamp_to_datetime(phototaken["timestamp"])
+        if has_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeOriginal):
+            skipped.append("DateTimeOriginal")
+        else:
+            set_ifd_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeOriginal, dt_str.encode("ascii"))
+            written.append(f"DateTimeOriginal={dt_str}")
 
-    # --- DateTime ---
+    # --- DateTimeDigitized (from creationTime) ---
     creation_time = meta.get("creationTime")
     if creation_time and "timestamp" in creation_time:
         dt_str = timestamp_to_datetime(creation_time["timestamp"])
+        if has_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeDigitized):
+            skipped.append("DateTimeDigitized")
+        else:
+            set_ifd_tag(exif_dict, "Exif", piexif.ExifIFD.DateTimeDigitized, dt_str.encode("ascii"))
+            written.append(f"DateTimeDigitized={dt_str}")
+
+    # --- DateTime (prefer photoTakenTime, fall back to creationTime) ---
+    datetime_source = meta.get("photoTakenTime") or creation_time
+    if datetime_source and "timestamp" in datetime_source:
+        dt_str = timestamp_to_datetime(datetime_source["timestamp"])
         if has_tag(exif_dict, "Image", piexif.ImageIFD.DateTime):
             skipped.append("DateTime")
         else:
@@ -193,9 +258,10 @@ def process_directory(directory, recursive=False, dry_run=False):
         if ".supplemental-metadata" not in json_file.name:
             continue
         expected_name = _get_expected_image_name(json_file.stem)
-        candidates = list(json_file.parent.iterdir())
-        matched = [c for c in candidates if c.name.upper() == expected_name.upper() and c.suffix.lower() in SUPPORTED_EXTENSIONS]
+        trailing_dots = _get_trailing_dot_count(json_file.stem)
+        matched = _find_matching_image(json_file, expected_name, trailing_dots)
         if not matched and '.' not in expected_name:
+            candidates = list(json_file.parent.iterdir())
             for ext in SUPPORTED_EXTENSIONS:
                 alt_name = f"{expected_name}{ext}"
                 alt_matched = [c for c in candidates if c.name.upper() == alt_name.upper()]

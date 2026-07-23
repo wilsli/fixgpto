@@ -163,14 +163,17 @@ def write_metadata(image_path, meta, dry_run=False):
             written.append("MediaModifyDate=" + dt_str)
 
     # --- FileCreateDate (filesystem creation date) ---
-    fs_creation = meta.get("photoTakenTime") or meta.get("photoCreationTime")
-    if fs_creation and "timestamp" in fs_creation:
-        dt_str = timestamp_to_datetime(fs_creation["timestamp"])
-        if has_tag(existing, "FileCreateDate"):
-            skipped.append("FileCreateDate")
-        else:
-            tags.extend(["-FileCreateDate=" + dt_str])
-            written.append("FileCreateDate=" + dt_str)
+    # Only supported on Windows and macOS
+    import platform
+    if platform.system() in ('Windows', 'Darwin'):
+        fs_creation = meta.get("photoTakenTime") or meta.get("photoCreationTime")
+        if fs_creation and "timestamp" in fs_creation:
+            dt_str = timestamp_to_datetime(fs_creation["timestamp"])
+            if has_tag(existing, "FileCreateDate"):
+                skipped.append("FileCreateDate")
+            else:
+                tags.extend(["-FileCreateDate=" + dt_str])
+                written.append("FileCreateDate=" + dt_str)
 
     # --- GPS ---
     geo = meta.get("geoData", {})
@@ -223,8 +226,12 @@ def write_metadata(image_path, meta, dry_run=False):
 def write_file_created_date(image_path, timestamp, dry_run=False):
     """Write FileCreateDate (filesystem creation date) using exiftool.
     
-    Returns (written: bool, error: str|None).
+    Silently skips on non-Windows/Darwin platforms.
     """
+    import platform
+    if platform.system() not in ('Windows', 'Darwin'):
+        return True, None
+    
     dt_str = timestamp_to_datetime(timestamp)
     tags = [f"-FileCreateDate={dt_str}"]
     if not dry_run:

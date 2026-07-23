@@ -244,15 +244,11 @@ def fill_exif(image_path, meta, dry_run=False):
         piexif.insert(new_exif_bytes, image_path)
 
     # --- Filesystem CreationDate (from photoTakenTime or photoCreationTime) ---
+    # Silently skipped on Linux (exiftool doesn't support writing it)
     fs_creation = meta.get("photoTakenTime") or meta.get("photoCreationTime")
     if fs_creation and "timestamp" in fs_creation:
         ts = int(fs_creation["timestamp"])
-        dt_str = timestamp_to_datetime(fs_creation["timestamp"])
-        success, error = write_file_created_date(image_path, ts, dry_run=dry_run)
-        if success:
-            written.append(f"FileCreateDate={dt_str}")
-        else:
-            skipped.append("FileCreateDate")
+        write_file_created_date(image_path, ts, dry_run=dry_run)
 
     return written, skipped
 
